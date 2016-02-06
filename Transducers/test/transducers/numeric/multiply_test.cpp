@@ -40,7 +40,7 @@ public:
 		mult.process_symbol(f, 3, 0);
 		auto f2 = mult.identity_result();
 		mult.process_symbol(f2, 4, 1);
-		mult.merge_results(f, f2, 0);
+		mult.merge_results(f, f2);
 		CPPUNIT_ASSERT_EQUAL(std::size_t(2), mult.last_stage_result(f).size());
 		CPPUNIT_ASSERT_EQUAL(6, mult.last_stage_result(f).at(0));
 		CPPUNIT_ASSERT_EQUAL(8, mult.last_stage_result(f).at(1));

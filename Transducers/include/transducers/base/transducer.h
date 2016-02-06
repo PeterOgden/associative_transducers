@@ -20,12 +20,16 @@ public:
 		m_next->process_symbol(p.second, s, offset);
 	}
 	PartialType& unwrap(partial_result& p) const { return p.first; }
+	const PartialType& unwrap(const partial_result& p) const { return p.first; }
 
 	void process_symbol(partial_result& p, const input_symbol& s, std::size_t offset) const {
 		this->output(p, s, offset);
 	}
-	void merge_results(partial_result& lhs, const partial_result& rhs, std::size_t offset) const {
-		m_next->merge_results(lhs.second, rhs.second, offset);
+	void merge_results(partial_result& lhs, const partial_result& rhs) const {
+		m_next->merge_results(lhs.second, rhs.second);
+	}
+	void merge_next(partial_result& lhs, const partial_result& rhs) {
+		m_next->merge_results(lhs.second, rhs.second);
 	}
 
 	partial_result initial_result() const {

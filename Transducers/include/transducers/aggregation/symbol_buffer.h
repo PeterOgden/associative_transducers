@@ -23,7 +23,7 @@ public:
 		pr.push_back(s);
 	}
 
-	void merge_results(partial_result& lhs, const partial_result& rhs, std::size_t offset) const {
+	void merge_results(partial_result& lhs, const partial_result& rhs) const {
 		std::copy(rhs.begin(), rhs.end(), std::back_inserter(lhs));
 	}
 };

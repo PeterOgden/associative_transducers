@@ -19,7 +19,7 @@ public:
 		auto f2 = buffer.identity_result();
 		buffer.process_symbol(f1, 1, 0);
 		buffer.process_symbol(f2, 2, 1);
-		buffer.merge_results(f1, f2, 0);
+		buffer.merge_results(f1, f2);
 		CPPUNIT_ASSERT_EQUAL(std::size_t(2), f1.size());
 		CPPUNIT_ASSERT_EQUAL(1, f1[0]);
 		CPPUNIT_ASSERT_EQUAL(2, f1[1]);
