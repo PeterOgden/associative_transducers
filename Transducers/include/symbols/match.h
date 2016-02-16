@@ -36,6 +36,7 @@ template <typename Stream>
 Stream& operator<<(Stream& s, const match& m) {
 	s << "match: " << m.rule << ", " << m.start_offset << ", " 
 	  << m.end_offset << "\n";
+	return s;
 }
 
 }
