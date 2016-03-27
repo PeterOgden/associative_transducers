@@ -4,36 +4,6 @@
 
 using namespace data_structures;
 
-namespace data_structures {
-bool operator==(const pushdown_state_map<int>::entry& lhs, const pushdown_state_map<int>::entry& rhs) {
-	return std::equal(lhs.start_stack_begin(), lhs.start_stack_end(),
-			rhs.start_stack_begin(), rhs.start_stack_end()) &&
-		std::equal(lhs.finish_stack_begin(), lhs.finish_stack_end(),
-			rhs.finish_stack_begin(), rhs.finish_stack_end()) &&
-		lhs.value() == rhs.value();
-}
-}
-bool operator==(const pushdown_state_map<int>& lhs, const pushdown_state_map<int>& rhs) {
-	return std::equal(lhs.entries_begin(), lhs.entries_end(), rhs.entries_begin(), rhs.entries_end());
-}
-
-void operator<<(std::ostream& s, const pushdown_state_map<int>::entry& e) {
-	s << "Start: ";
-	std::for_each(e.start_stack_begin(), e.start_stack_end(),
-		[&](int i) { s << i << ", "; });
-	s << "Finish: ";
-	std::for_each(e.finish_stack_begin(), e.finish_stack_end(),
-		[&](int i) { s << i << ", "; });
-	s << "State: " << e.value() << "\n";
-}
-
-void operator<<(std::ostream& s, const pushdown_state_map<int>& m) {
-	std::for_each(m.entries_begin(), m.entries_end(),
-		[&](const pushdown_state_map<int>::entry& e) {
-		s << e;
-	});
-}
-
 class pushdown_state_map_test: public CppUnit::TestFixture {
 public:
 	CPPUNIT_TEST_SUITE(pushdown_state_map_test);
@@ -74,8 +44,9 @@ public:
 			m1.add_entry(&i, &i + 1, &i, &i + 1, i);
 			exp.add_entry(&i, &i + 1, &constant, &constant + 1, i);
 		}
-		std::for_each(m1.layer_begin(), m1.layer_end(),
-			[](state_map::layer_info& l) { l.state(1); });
+		for (auto iter = m1.layer_begin(); iter != m1.layer_end(); ++iter) {
+			m1.transition_state(iter, 1);
+		}
 		m1.finalise();
 
 		CPPUNIT_ASSERT_EQUAL(exp, m1);
@@ -103,7 +74,7 @@ public:
 		};
 		auto layer_iter = m1.layer_begin();
 		for (int i = 0; i < 3; ++i) {
-			m1.push_state(layer_iter++, 0);
+			m1.push_state(layer_iter++, 0, i);
 		}
 		m1.finalise();
 		exp.finalise();
@@ -132,7 +103,7 @@ public:
 		CPPUNIT_ASSERT_EQUAL(ssize_t(5), std::distance(layer->children_begin(), layer->children_end()));
 		auto sub_layer = layer->children_begin();
 		for (int i = 0; i < 3; ++i) {
-			m1.pop_state(sub_layer++);
+			m1.pop_state(sub_layer++, sub_layer->state());
 		}
 		m1.finalise();
 		CPPUNIT_ASSERT_EQUAL(exp, m1);

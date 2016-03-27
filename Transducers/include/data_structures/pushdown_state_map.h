@@ -7,6 +7,10 @@
 
 #include <boost/iterator/iterator_adaptor.hpp>
 #include <boost/iterator/iterator_facade.hpp>
+#include <boost/iterator/filter_iterator.hpp>
+
+#include <util/range.h>
+#include <utility>
 
 namespace data_structures {
 
@@ -46,21 +50,46 @@ public:
 			return std::lexicographical_compare(m_start_stack.begin(), m_start_stack.end(),
 				other.m_start_stack.begin(), other.m_start_stack.end());
 		}
-	public:	// Should  be private but access issues inside algoritms
+		bool valid() const { return !updated && !m_erase; }
+	public:	// Should  be private but access issues inside algorithms
 		std::vector<int> m_start_stack;
 		std::vector<int> m_finish_stack;
 		Value m_value;
 		bool m_erase = false;
+		bool updated = false;
 		friend class pushdown_state_map;
+		friend bool operator==(const entry& lhs, const entry& rhs) {
+			return std::equal(lhs.start_stack_begin(), lhs.start_stack_end(),
+					rhs.start_stack_begin(), rhs.start_stack_end()) &&
+				std::equal(lhs.finish_stack_begin(), lhs.finish_stack_end(),
+					rhs.finish_stack_begin(), rhs.finish_stack_end()) &&
+				lhs.value() == rhs.value();
+		}
+	};
+
+	struct valid_filter {
+		bool operator()(const entry& e) { return e.valid(); }
 	};
 
 	typedef typename std::vector<entry>::iterator entry_iterator;
 	typedef typename std::vector<entry>::const_iterator const_entry_iterator;
+	typedef boost::filter_iterator<valid_filter, entry_iterator> valid_entry_iterator;
+	typedef boost::filter_iterator<valid_filter, const_entry_iterator> const_valid_entry_iterator;
+
+	
 
 	entry_iterator entries_begin() { return m_entries.begin(); }
 	entry_iterator entries_end() { return m_entries.end(); }
+
 	const_entry_iterator entries_begin() const { return m_entries.begin(); }
 	const_entry_iterator entries_end() const { return m_entries.end(); }
+
+	valid_entry_iterator valid_entries_begin() { return valid_entry_iterator(entries_begin()); }
+	valid_entry_iterator valid_entries_end() { return valid_entry_iterator(entries_end()); }
+
+	util::range<entry_iterator> entries() { return util::range<entry_iterator>{ entries_begin(), entries_end() }; }
+	util::range<const_entry_iterator> entries() const { return util::range<const_entry_iterator>{ entries_begin(), entries_end() }; }
+	util::range<valid_entry_iterator> valid_entries() { return util::range<valid_entry_iterator>{ valid_entries_begin(), valid_entries_end() }; }
 
 	class value_iterator : public boost::iterator_adaptor<value_iterator,
 		entry_iterator, Value> {
@@ -78,17 +107,18 @@ public:
 
 	class layer_info {
 	public:
-		int state() {
+		int state() const {
 			assert (m_begin != m_end);
 			assert (m_begin->m_finish_stack.size() > m_layer);
 			return m_begin->m_finish_stack[m_layer];
 		};
-		void state(int s) {
-			std::for_each(m_begin, m_end,
-				[=](entry& e) {
-					assert(e.m_finish_stack.size() > m_layer);
-					e.m_finish_stack[m_layer] = s;
-			});
+
+		layer_iterator find_child(int state) {
+			// This could be a binary search but I'm not sure it really matters
+			// given that anyone using this implementation isn't going to care
+			// about speed
+			return std::find_if(children_begin(), children_end(),
+				[&](const layer_info& l ) { return l.state() == state; });
 		}
 
 		value_iterator values_begin() { return value_iterator(m_begin); }
@@ -96,6 +126,9 @@ public:
 
 		layer_iterator children_begin() { return layer_iterator(m_layer + 1, m_children_begin, m_end); }
 		layer_iterator children_end() { return layer_iterator(m_layer + 1, m_end, m_end); }
+		util::range<layer_iterator> children() {
+			return util::range<layer_iterator>(children_begin(), children_end());
+		}
 	private:
 		unsigned int m_layer;
 		entry_iterator m_begin;
@@ -104,6 +137,19 @@ public:
 		friend class layer_iterator;
 		friend class pushdown_state_map;
 		
+		util::range<entry_iterator> entries() {
+			return util::range<entry_iterator>(m_begin, m_end);
+		}
+		util::range<entry_iterator> value_entries() {
+			return util::range<entry_iterator>(m_begin, m_children_begin);
+		}
+		util::range<valid_entry_iterator> valid_entries() {
+			return util::range<valid_entry_iterator>(
+					valid_entry_iterator(m_begin),
+					valid_entry_iterator(m_end)
+				);
+		}
+
 	};
 
 	class layer_iterator: public boost::iterator_facade<layer_iterator, layer_info, boost::forward_traversal_tag> {
@@ -124,10 +170,10 @@ public:
 			unsigned int layer = m_info.m_layer;
 			int s = begin->m_finish_stack[layer];
 			m_info.m_end = std::find_if(begin, m_end, [=](const entry& e) {
-				return (e.m_finish_stack.size() <= layer || e.m_finish_stack[layer] != s);
+				return (e.updated == false && (e.m_finish_stack.size() <= layer || e.m_finish_stack[layer] != s));
 			});
 			m_info.m_children_begin = std::find_if(begin, m_info.m_end, [=](const entry& e) {
-				return e.m_finish_stack.size() != layer + 1;
+				return e.updated == false && e.m_finish_stack.size() != layer + 1;
 			});
 		}
 
@@ -169,7 +215,9 @@ public:
 
 	layer_iterator layer_begin() { return layer_iterator(0, m_entries.begin(), m_entries.end()); }
 	layer_iterator layer_end() { return layer_iterator(0, m_entries.end(), m_entries.end()); }
-
+	util::range<layer_iterator> layers() {
+		return util::range<layer_iterator>(layer_begin(), layer_end());
+	}
 	start_layer_iterator start_layer_begin() { return start_layer_iterator(0, m_entries.begin(), m_entries.end()); }
 	start_layer_iterator start_layer_end() { return start_layer_iterator(0, m_entries.end(), m_entries.end()) ;}
 
@@ -181,43 +229,60 @@ public:
 			std::move(value));
 	}
 
-	void finalise() {
-		auto erase_iter = std::remove_if(m_entries.begin(), m_entries.end(),
-			[](const entry& e) { return e.m_erase; });
-		m_entries.erase(erase_iter, m_entries.end());
-		m_entries.reserve(m_entries.size() * 3);
+	void finalise(bool keep_unmodified = true) {
+		if (keep_unmodified) {
+			m_new_entries.insert(m_new_entries.end(),
+					valid_entries_begin(), valid_entries_end());
+		}
+		m_entries = std::move(m_new_entries);
+		m_new_entries.clear();
+
 		std::sort(m_entries.begin(), m_entries.end());
+	}
+
+	void transition_state(const layer_iterator& layer, int state) {
+		for (auto& e: layer->valid_entries()) {
+			m_new_entries.push_back(e);
+			m_new_entries.back().m_finish_stack[layer->m_layer] = state;
+			e.updated = true;
+		}
 	}
 
 	// Inserts another state for all elements between this element
 	// and its parent
-	void push_state(const layer_iterator& layer, int state) {
-		std::for_each(layer->m_begin, layer->m_end,
-			[&](entry& e) {
-			e.m_finish_stack.insert(e.m_finish_stack.begin() + layer->m_layer, state);
-		});
+	void push_state(const layer_iterator& layer, int new_state, int push_state) {
+		for (auto& e: layer->valid_entries()) {
+			m_new_entries.push_back(e);
+			auto& ne = m_new_entries.back();
+
+			ne.m_finish_stack.insert(ne.m_finish_stack.begin() + layer->m_layer + 1, push_state);
+			ne.m_finish_stack[layer->m_layer] = new_state;
+			e.updated = true;
+		};
 	}
 
 	// Remove parent parent layer and attach to grandparent, cannot be
 	// called on a child of the root
-	void pop_state(const layer_iterator& layer) {
+	void pop_state(const layer_iterator& layer, int new_state) {
 		assert(layer->m_layer > 0);
-		std::for_each(layer->m_begin, layer->m_end,
-			[&](entry& e) {
-			e.m_finish_stack.erase(e.m_finish_stack.begin() + layer->m_layer - 1,
-				e.m_finish_stack.begin() + layer->m_layer);
-		});
+		for (auto& e: layer->valid_entries()) {
+			m_new_entries.push_back(e);
+			auto& ne = m_new_entries.back();
+			ne.m_finish_stack.erase(ne.m_finish_stack.begin() + layer->m_layer - 1,
+				ne.m_finish_stack.begin() + layer->m_layer);
+			ne.m_finish_stack[layer->m_layer] = new_state;
+			e.updated = true;
+		};
 	}
 
 	void pop_unknown_state(const layer_iterator& layer, int start_state, int finish_state) {
-		assert(m_entries.capacity() >= m_entries.size() + std::distance(layer->m_begin, layer->m_children_begin));
-		std::for_each(layer->m_begin, layer->m_children_begin,
-			[&](entry& e) {
-			m_entries.push_back(e);
-			auto& ne = m_entries.back();
+//		assert(m_entries.capacity() >= m_entries.size() + std::distance(layer->m_begin, layer->m_children_begin));
+		for (auto& e: layer->value_entries()) {
+			m_new_entries.push_back(e);
+			auto& ne = m_new_entries.back();
 			ne.m_finish_stack[layer->m_layer] = finish_state;
 			ne.m_start_stack.push_back(start_state);
-		});	
+		};
 	}
 
 	void clear_values(const layer_iterator& layer) {
@@ -243,8 +308,33 @@ private:
 		});
 	}
 	std::vector<entry> m_entries;
+	std::vector<entry> m_new_entries;
 };
 
+template <typename Value>
+bool operator==(const pushdown_state_map<Value>& lhs, const pushdown_state_map<Value>& rhs) {
+	return std::equal(lhs.entries_begin(), lhs.entries_end(), rhs.entries_begin(), rhs.entries_end());
+}
+
+template <typename Value>
+void pushdown_state_map_entry_print(std::ostream& s, const typename pushdown_state_map<Value>::entry& e) {
+	s << "Start: ";
+	std::for_each(e.start_stack_begin(), e.start_stack_end(),
+		[&](int i) { s << i << ", "; });
+	s << "Finish: ";
+	std::for_each(e.finish_stack_begin(), e.finish_stack_end(),
+		[&](int i) { s << i << ", "; });
+	s << "State: " << e.value() << "\n";
+}
+
+template <typename Value>
+std::ostream& operator<<(std::ostream& s, const pushdown_state_map<Value>& m) {
+	std::for_each(m.entries_begin(), m.entries_end(),
+		[&](const typename pushdown_state_map<Value>::entry& e) {
+		pushdown_state_map_entry_print<Value>(s,e);
+	});
+	return s;
+}
 }
 
 #endif
