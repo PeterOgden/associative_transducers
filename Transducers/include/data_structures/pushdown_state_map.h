@@ -39,6 +39,12 @@ public:
 		stack_iterator finish_stack_begin() const { return m_finish_stack.begin(); }
 		stack_iterator finish_stack_end() const  { return m_finish_stack.end(); }
 
+		util::range<stack_iterator> start_stack() const {
+			return util::range<stack_iterator>(start_stack_begin(), start_stack_end());
+		}
+		util::range<stack_iterator> finish_stack() const {
+			return util::range<stack_iterator>(finish_stack_begin(), finish_stack_end());
+		}
 		const Value& value() const { return m_value; }
 		Value& value() { return m_value; }
 
@@ -67,6 +73,10 @@ public:
 		}
 	};
 
+	struct no_value_update {
+		void operator()(Value&) const {}
+	};
+
 	struct valid_filter {
 		bool operator()(const entry& e) { return e.valid(); }
 	};
@@ -76,16 +86,14 @@ public:
 	typedef boost::filter_iterator<valid_filter, entry_iterator> valid_entry_iterator;
 	typedef boost::filter_iterator<valid_filter, const_entry_iterator> const_valid_entry_iterator;
 
-	
-
 	entry_iterator entries_begin() { return m_entries.begin(); }
 	entry_iterator entries_end() { return m_entries.end(); }
 
 	const_entry_iterator entries_begin() const { return m_entries.begin(); }
 	const_entry_iterator entries_end() const { return m_entries.end(); }
 
-	valid_entry_iterator valid_entries_begin() { return valid_entry_iterator(entries_begin()); }
-	valid_entry_iterator valid_entries_end() { return valid_entry_iterator(entries_end()); }
+	valid_entry_iterator valid_entries_begin() { return valid_entry_iterator(entries_begin(), entries_end()); }
+	valid_entry_iterator valid_entries_end() { return valid_entry_iterator(entries_end(), entries_end()); }
 
 	util::range<entry_iterator> entries() { return util::range<entry_iterator>{ entries_begin(), entries_end() }; }
 	util::range<const_entry_iterator> entries() const { return util::range<const_entry_iterator>{ entries_begin(), entries_end() }; }
@@ -145,8 +153,8 @@ public:
 		}
 		util::range<valid_entry_iterator> valid_entries() {
 			return util::range<valid_entry_iterator>(
-					valid_entry_iterator(m_begin),
-					valid_entry_iterator(m_end)
+					valid_entry_iterator(m_begin, m_end),
+					valid_entry_iterator(m_end, m_end)
 				);
 		}
 
@@ -229,6 +237,9 @@ public:
 			std::move(value));
 	}
 
+	void insert(const entry& e) {
+		m_new_entries.emplace_back(e);
+	}
 	void finalise(bool keep_unmodified = true) {
 		if (keep_unmodified) {
 			m_new_entries.insert(m_new_entries.end(),
@@ -240,30 +251,35 @@ public:
 		std::sort(m_entries.begin(), m_entries.end());
 	}
 
-	void transition_state(const layer_iterator& layer, int state) {
+	template <typename Fn = no_value_update>
+	void transition_state(const layer_iterator& layer, int state, const Fn& fn = Fn{}) {
 		for (auto& e: layer->valid_entries()) {
 			m_new_entries.push_back(e);
 			m_new_entries.back().m_finish_stack[layer->m_layer] = state;
+			fn(m_new_entries.back().value());
 			e.updated = true;
 		}
 	}
 
 	// Inserts another state for all elements between this element
 	// and its parent
-	void push_state(const layer_iterator& layer, int new_state, int push_state) {
+	template <typename Fn = no_value_update>
+	void push_state(const layer_iterator& layer, int new_state, int push_state, const Fn& fn = Fn{}) {
 		for (auto& e: layer->valid_entries()) {
 			m_new_entries.push_back(e);
 			auto& ne = m_new_entries.back();
 
 			ne.m_finish_stack.insert(ne.m_finish_stack.begin() + layer->m_layer + 1, push_state);
 			ne.m_finish_stack[layer->m_layer] = new_state;
+			fn(ne.value());
 			e.updated = true;
 		};
 	}
 
 	// Remove parent parent layer and attach to grandparent, cannot be
 	// called on a child of the root
-	void pop_state(const layer_iterator& layer, int new_state) {
+	template <typename Fn = no_value_update>
+	void pop_state(const layer_iterator& layer, int new_state, const Fn& fn = Fn{}) {
 		assert(layer->m_layer > 0);
 		for (auto& e: layer->valid_entries()) {
 			m_new_entries.push_back(e);
@@ -271,17 +287,20 @@ public:
 			ne.m_finish_stack.erase(ne.m_finish_stack.begin() + layer->m_layer - 1,
 				ne.m_finish_stack.begin() + layer->m_layer);
 			ne.m_finish_stack[layer->m_layer] = new_state;
+			fn(ne.value());
 			e.updated = true;
 		};
 	}
 
-	void pop_unknown_state(const layer_iterator& layer, int start_state, int finish_state) {
+	template <typename Fn = no_value_update>
+	void pop_unknown_state(const layer_iterator& layer, int start_state, int finish_state, const Fn& fn = Fn{}) {
 //		assert(m_entries.capacity() >= m_entries.size() + std::distance(layer->m_begin, layer->m_children_begin));
 		for (auto& e: layer->value_entries()) {
 			m_new_entries.push_back(e);
 			auto& ne = m_new_entries.back();
 			ne.m_finish_stack[layer->m_layer] = finish_state;
 			ne.m_start_stack.push_back(start_state);
+			fn(ne.value());
 		};
 	}
 
@@ -293,6 +312,12 @@ public:
 		mark_for_erase(layer->m_begin, layer->m_end);
 	}
 
+	// This is a workaround to allow this function to be const
+	// This const is definitely not thread safe but given its use as a testing function
+	// that shouldn't matter.
+	void start_stack_finalise() const {
+		const_cast<pushdown_state_map*>(this)->start_stack_finalise();
+	}
 	void start_stack_finalise() {
 		std::sort(m_entries.begin(), m_entries.end(),
 			[](const entry& lhs, const entry& rhs) {
@@ -301,6 +326,30 @@ public:
 		});
 	}
 
+	struct matching_entries_cmp {
+		template <typename Range>
+		bool operator() (const entry& lhs, const Range& rhs) {
+			auto compare_range = std::min(lhs.start_stack_end() - lhs.start_stack_begin(), rhs.end() - rhs.begin());
+			return std::lexicographical_compare(lhs.start_stack_begin(),
+					lhs.start_stack_begin() + compare_range, rhs.begin(), rhs.begin() + compare_range);
+		}
+		template <typename Range>
+		bool operator() (const Range& lhs, const entry& rhs) {
+			auto compare_range = std::min(lhs.end() - lhs.begin(), rhs.start_stack_end() - rhs.start_stack_begin());
+			return std::lexicographical_compare(lhs.begin(), lhs.begin() + compare_range,
+					rhs.start_stack_begin(), rhs.start_stack_begin() + compare_range);
+		}
+	};
+
+	template <typename Range>
+	util::range<const_entry_iterator> matching_entries(const Range& r) const {
+		const auto& ret = std::equal_range(entries_begin(), entries_end(), r, matching_entries_cmp());
+		return util::range<const_entry_iterator>(ret.first, ret.second);
+	}
+	void clear() {
+		m_entries.clear();
+		m_new_entries.clear();
+	}
 private:
 	void mark_for_erase(entry_iterator begin, entry_iterator end) {
 		std::for_each(begin, end, [](entry& e) {
