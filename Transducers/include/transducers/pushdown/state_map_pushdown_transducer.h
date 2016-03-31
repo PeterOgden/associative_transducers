@@ -9,7 +9,7 @@
 namespace transducers {
 namespace pushdown {
 
-template <typename Next>
+template <typename Next, template <typename> class MapType>
 class state_map_pushdown_transducer {
 public:
 	explicit state_map_pushdown_transducer(const Next& next, const representation::dft_description& dft) {
@@ -39,7 +39,7 @@ public:
 	typedef unsigned int output_symbol;
 	typedef typename Next::terminal_result terminal_result;
 
-	typedef data_structures::pushdown_state_map<typename Next::partial_result> map_type;
+	typedef MapType<typename Next::partial_result> map_type;
 	class partial_result {
 	public:
 		const map_type& map() { return m_map; }
@@ -144,7 +144,7 @@ public:
 		for (auto& e1: old.entries()) {
 			const auto& found = rhs.m_map.matching_entries(e1.finish_stack());
 			for(auto& e2: found) {
-				lhs.m_map.insert(unify_entries(e1, e2));
+				unify_entries(e1, e2, lhs.m_map);
 			}
 		}
 		lhs.m_map.finalise();
@@ -166,7 +166,7 @@ private:
 	}
 
 	typedef typename map_type::entry map_entry;
-	map_entry unify_entries(map_entry lhs, const map_entry& rhs) {
+	void unify_entries(map_entry lhs, const map_entry& rhs, map_type& the_map) {
 		std::vector<int> new_start(lhs.start_stack_begin(), lhs.start_stack_end());
 		std::vector<int> new_finish(rhs.finish_stack_begin(), rhs.finish_stack_end());
 
@@ -183,10 +183,9 @@ private:
 		} else {
 			new_start.insert(new_start.end(), rhs_start_begin + lhs_finish_size, rhs_start_end);
 		}
-
-		map_entry ret(new_start, new_finish, lhs.value());
-		m_next->merge_results(ret.value(), rhs.value());
-		return ret;
+		auto r = lhs.value();
+		m_next->merge_results(r, rhs.value());
+		the_map.add_entry(new_start.begin(), new_start.end(), new_finish.begin(), new_finish.end(), std::move(r));
 	}
 	struct transition_details {
 		int output = -1;
@@ -210,7 +209,12 @@ private:
 	const Next* m_next;
 };
 
+
+template <typename Next>
+using explicit_state_map_pushdown_transducer = state_map_pushdown_transducer<Next, data_structures::pushdown_state_map>;
+
 }
 }
+
 
 #endif

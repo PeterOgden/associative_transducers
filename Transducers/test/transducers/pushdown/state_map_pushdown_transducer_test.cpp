@@ -12,6 +12,7 @@ namespace std {
 	}
 }
 
+template <template <typename> class MapType>
 class state_map_pushdown_transducer_test : public CppUnit::TestFixture {
 public:
 	CPPUNIT_TEST_SUITE(state_map_pushdown_transducer_test);
@@ -58,14 +59,15 @@ public:
 
 	}
 	void tearDown() {}
-
-	typedef transducers::pushdown::state_map_pushdown_transducer<transducers::aggregation::symbol_buffer<uint32_t>> transducer_type;
+	template <typename Next>
+	using TransducerType = transducers::pushdown::state_map_pushdown_transducer<Next, MapType>;
+	typedef TransducerType<transducers::aggregation::symbol_buffer<uint32_t>> transducer_type;
 	typedef transducers::aggregation::symbol_buffer<uint32_t> buffer;
 	typedef data_structures::pushdown_state_map<buffer::partial_result> map_type;
 
 	void simple_test() {
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.initial_result();
 		CPPUNIT_ASSERT_EQUAL(pr1, pr1);
 		auto pr2 = pr1;
@@ -74,7 +76,7 @@ public:
 
 	void construction_test() {
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.initial_result();
 		const auto& pr1_map = pr1.map();
 		CPPUNIT_ASSERT_EQUAL(ssize_t(1), std::distance(pr1_map.entries_begin(), pr1_map.entries_end()));
@@ -107,7 +109,7 @@ public:
 	}
 	void transition_test() {
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.initial_result();
 		trans.process_symbol(pr1, 'a', 0);
 		map_type target;
@@ -117,7 +119,7 @@ public:
 
 	void discard_test() {
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.identity_result();
 		trans.process_symbol(pr1, 'a', 0);
 		map_type target;
@@ -130,7 +132,7 @@ public:
 		add_map_entry(s, {1}, {4,1});
 		add_map_entry(t, {1}, {1}, {2});
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.map_to_result(s);
 		trans.process_symbol(pr1, 'f', 0);
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
@@ -143,7 +145,7 @@ public:
 		add_map_entry(t, {4,2}, {2}, {2});
 
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.map_to_result(s);
 		trans.process_symbol(pr1, 'f', 0);
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
@@ -158,7 +160,7 @@ public:
 		add_map_entry(t,{4,2},{2}, {2});
 
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.map_to_result(s);
 		trans.process_symbol(pr1, 'f', 0);
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
@@ -170,7 +172,7 @@ public:
 		add_map_entry(t,{1},{3,4}, {1});
 
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.map_to_result(s);
 		trans.process_symbol(pr1, 'b', 0);
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
@@ -184,7 +186,7 @@ public:
 		add_map_entry(t, {1},{3,4}, {1});
 
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.map_to_result(s);
 		trans.process_symbol(pr1, 'b', 0);
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
@@ -198,7 +200,7 @@ public:
 		add_map_entry(t, {3},{1});
 
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.map_to_result(s);
 		trans.process_symbol(pr1, 'e', 0);
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
@@ -214,7 +216,7 @@ public:
 		add_map_entry(t,{4},{2}, {2});
 
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.map_to_result(s);
 		trans.process_symbol(pr1, 'f', 0);
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
@@ -230,7 +232,7 @@ public:
 		add_map_entry(v,{3,2,2},{2}, {2,2});
 
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.map_to_result(s);
 		trans.process_symbol(pr1, 'f', 0);
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
@@ -242,7 +244,7 @@ public:
 
 	void identity_merge_test() {
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.identity_result();
 		auto pr2 = trans.identity_result();
 		auto pr3 = trans.identity_result();
@@ -253,7 +255,7 @@ public:
 
 	void simple_merge_test() {
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.identity_result();
 		auto pr2 = trans.identity_result();
 		auto pr3 = trans.identity_result();
@@ -269,7 +271,7 @@ public:
 
 	void pop_merge_test() {
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 		auto pr1 = trans.identity_result();
 		auto pr2 = trans.identity_result();
 		auto pr3 = trans.identity_result();
@@ -285,7 +287,7 @@ public:
 
 	void merge_all_3_test() {
 		buffer b;
-		auto trans = transducers::compose<transducers::pushdown::state_map_pushdown_transducer>(b, description);
+		auto trans = transducers::compose<TransducerType>(b, description);
 
 		for (char a = 'a'; a <= 'g'; ++a) {
 			for (char b = 'a'; b <= 'g'; ++b) {
@@ -312,4 +314,4 @@ public:
 	}
 };
 
-CPPUNIT_TEST_SUITE_REGISTRATION(state_map_pushdown_transducer_test);
+CPPUNIT_TEST_SUITE_REGISTRATION(state_map_pushdown_transducer_test<data_structures::pushdown_state_map>);
