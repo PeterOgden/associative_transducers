@@ -1,4 +1,4 @@
-#ifndef UTIL_HANGE_H_
+#ifndef UTIL_RANGE_H_
 #define UTIL_RANGE_H_
 
 namespace util {
@@ -15,6 +15,11 @@ private:
 	It m_begin;
 	It m_end;
 };
+
+template <typename It>
+range<It> make_range(It b, It e) {
+	return range<It>(std::move(b), std::move(e));
+}
 
 }
 

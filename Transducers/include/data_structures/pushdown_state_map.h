@@ -131,6 +131,7 @@ public:
 
 		value_iterator values_begin() { return value_iterator(m_begin); }
 		value_iterator values_end() { return value_iterator(m_children_begin); }
+		bool has_values() { return values_begin() != values_end(); }
 
 		layer_iterator children_begin() { return layer_iterator(m_layer + 1, m_children_begin, m_end); }
 		layer_iterator children_end() { return layer_iterator(m_layer + 1, m_end, m_end); }

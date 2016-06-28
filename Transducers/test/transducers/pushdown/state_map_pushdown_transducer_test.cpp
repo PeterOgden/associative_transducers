@@ -2,6 +2,7 @@
 #include "transducers/pushdown/state_map_pushdown_transducer.h"
 #include "transducers/aggregation/symbol_buffer.h"
 #include "transducers/compose.h"
+#include "data_structures/tree_state_map.h"
 
 namespace std {
 	std::ostream& operator<<(std::ostream& s, const std::vector<uint32_t> & v) {
@@ -27,6 +28,8 @@ public:
 	CPPUNIT_TEST(push_combine_test);
 	CPPUNIT_TEST(simple_combine_test);
 	CPPUNIT_TEST(pop_drop_test);
+	CPPUNIT_TEST(identity_drop_test);
+	CPPUNIT_TEST(transition_drop_test);
 	CPPUNIT_TEST(double_pop_test);
 	CPPUNIT_TEST(identity_merge_test);
 	CPPUNIT_TEST(simple_merge_test);
@@ -63,7 +66,7 @@ public:
 	using TransducerType = transducers::pushdown::state_map_pushdown_transducer<Next, MapType>;
 	typedef TransducerType<transducers::aggregation::symbol_buffer<uint32_t>> transducer_type;
 	typedef transducers::aggregation::symbol_buffer<uint32_t> buffer;
-	typedef data_structures::pushdown_state_map<buffer::partial_result> map_type;
+	typedef MapType<buffer::partial_result> map_type;
 
 	void simple_test() {
 		buffer b;
@@ -222,6 +225,30 @@ public:
 		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
 	}
 
+	void identity_drop_test() {
+		map_type t;
+		add_map_entry(t, {4,1},{1}, {2});
+		add_map_entry(t, {1}, {2});
+		add_map_entry(t, {4,2},{2}, {2});
+
+		buffer b;
+		auto trans = transducers::compose<TransducerType>(b, description);
+		auto pr1 = trans.identity_result();
+		trans.process_symbol(pr1, 'f', 0);
+		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
+	}
+	void transition_drop_test() {
+		map_type s,t;
+		add_map_entry(s, {4,1},{1});
+		add_map_entry(s, {4,2},{2});
+		add_map_entry(s, {1}, {2});
+		add_map_entry(t, {4,1},{2});
+		buffer b;
+		auto trans = transducers::compose<TransducerType>(b, description);
+		auto pr1 = trans.map_to_result(s);
+		trans.process_symbol(pr1, 'f', 0);
+		CPPUNIT_ASSERT_EQUAL(t, pr1.map());
+	}
 	void double_pop_test() {
 		map_type s,t,u,v;
 		add_map_entry(s,{3},{4});
@@ -315,3 +342,4 @@ public:
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(state_map_pushdown_transducer_test<data_structures::pushdown_state_map>);
+CPPUNIT_TEST_SUITE_REGISTRATION(state_map_pushdown_transducer_test<data_structures::tree_state_map>);

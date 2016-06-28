@@ -74,7 +74,7 @@ public:
 			}
 			const auto& details = find_iter->second;
 			if (!details.pop.empty()) {
-				if (iter->values_begin() != iter->values_end()) {
+				if (iter->has_values()) {
 					for (const auto& p: details.pop) {
 						if (p.output == -1) {
 							pr.m_map.pop_unknown_state(iter, p.state, p.state);
@@ -131,9 +131,9 @@ public:
 
 	// This is a function primarily designed for testing purposes so that the internal state map
 	// can be set prior to testing the operation of a transition
-	partial_result map_to_result(const map_type& m) {
+	partial_result map_to_result(map_type m) {
 		partial_result ret;
-		ret.m_map = m;
+		ret.m_map = std::move(m);
 		return ret;
 	}
 

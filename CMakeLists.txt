@@ -42,7 +42,6 @@ ENDIF()
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/Transducers/include)
 
 ADD_SUBDIRECTORY(Transducers)
-ADD_SUBDIRECTORY(Applications)
 
 SET (TEST_LIBS
   TransducersTest
