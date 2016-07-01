@@ -46,6 +46,15 @@ public:
 	transducer(const Next& n):
 		m_next(&n) {}
 
+protected:
+	partial_result initial_result(PartialType s) const {
+		return std::make_pair(std::move(s), m_next->initial_result());
+	}
+
+	partial_result identity_result(PartialType s) const {
+		return std::make_pair(std::move(s), m_next->identity_result());
+	}
+
 private:
 	const Next* m_next;
 };
