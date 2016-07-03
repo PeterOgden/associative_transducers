@@ -19,7 +19,7 @@ public:
 	using partial_result = typename base::sink_transducer<SymbolType, StorageType>::partial_result;
 	using input_symbol = typename base::sink_transducer<SymbolType, StorageType>::input_symbol;
 
-	void process_symbol(partial_result& pr, const input_symbol& s, std::size_t offset) const {
+	void process_symbol(partial_result& pr, const input_symbol& s, std::size_t /*offset*/) const {
 		pr.push_back(s);
 	}
 

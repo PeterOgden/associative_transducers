@@ -33,7 +33,7 @@ public:
 	using input_symbol = typename base_transducer::input_symbol;
 	using output_symbol = typename base_transducer::output_symbol;
 
-	using match = symbols::match;;
+	using match = symbols::match;
 
 	match_adapter(const Next& next):
 		base_transducer(next) {}
