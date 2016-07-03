@@ -8,6 +8,7 @@ SET (TRANSDUCERS_TEST
   test/transducers/finite/finite_transducer_test.cpp
   test/transducers/numeric/multiply_test.cpp
   test/transducers/pushdown/state_map_pushdown_transducer_test.cpp
+  test/transducers/util/buffer_transducer_test.cpp
   test/transducers/util/match_adapter_test.cpp
 )
 
